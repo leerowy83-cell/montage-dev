@@ -319,7 +319,7 @@ wc -l /home/claude/montagedev/templates/chat/index.html
   <div class="ac">
     <div class="alogo">
       <div class="amark">M</div>
-      <div><div class="aname">MontageDev AI</div><div class="asub">Claude Code intelligence in your pocket</div></div>
+      <div><div class="aname">MontageDev AI</div><div class="asub">Powerful AI coding agent in your pocket</div></div>
     </div>
     <div class="atabs">
       <div class="atab on" onclick="stab('in')">Sign in</div>
@@ -394,7 +394,7 @@ wc -l /home/claude/montagedev/templates/chat/index.html
       <div id="wlc">
         <div class="wm">M</div>
         <div class="wt">MontageDev AI</div>
-        <div class="ws">Your AI coding agent with Claude Code intelligence — writes code, runs commands, reads files, and searches the web.</div>
+        <div class="ws">Your AI coding agent — writes code, runs commands, reads files, searches the web, and more.</div>
         <div class="wg">
           <div class="wc" onclick="usechip(this)"><span class="wci">🏗️</span><span class="wct">Build something</span><span class="wcs">Create a feature or app</span></div>
           <div class="wc" onclick="usechip(this)"><span class="wci">🔍</span><span class="wct">Debug an issue</span><span class="wcs">Find and fix a bug</span></div>
@@ -440,7 +440,7 @@ wc -l /home/claude/montagedev/templates/chat/index.html
     <div class="phd"><span class="pt">Project Instructions</span><button class="px" onclick="cpan('mem-pan')"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="pb">
       <textarea id="cmta" placeholder="Write instructions for this conversation.&#10;&#10;Example:&#10;- Always use TypeScript&#10;- Prefer functional components&#10;- Use Tailwind for styling&#10;- API base URL is https://api.example.com"></textarea>
-      <div class="phn">These instructions are injected into every message in this conversation — like a CLAUDE.md file. The AI follows them precisely.</div>
+      <div class="phn">These instructions are injected into every message in this conversation — like a project config file. The AI follows them precisely.</div>
     </div>
     <div class="pft"><button class="btn-s" onclick="cpan('mem-pan')">Cancel</button><button class="btn-p" style="flex:1" onclick="savemem()">Save Instructions</button></div>
   </div>
@@ -687,17 +687,18 @@ function chksnd(){const v=document.getElementById('mi').value.trim();document.ge
 
 async function send(){
   if(streaming) return;
+  if(!tok){showerr('Not signed in — please refresh and sign in again.');return;}
   const mi=document.getElementById('mi');
   const txt=mi.value.trim();
   if(!txt&&!files.length) return;
   if(!cid){await newconv();}
+  if(!cid){showerr('Could not create conversation. Check your connection and try again.');return;}
   const fsn=[...files];files=[];renfiles();
   mi.value='';mi.style.height='auto';chksnd();
   appusermsg(txt,fsn);
   document.getElementById('wlc').classList.add('off');
   scrbot();
 
-  /* thinking indicator */
   const thk=document.createElement('div');
   thk.innerHTML=`<div class="trow"><div class="aav">M</div><div class="tdots"><span></span><span></span><span></span></div></div>`;
   document.getElementById('msgs').appendChild(thk);
@@ -713,6 +714,20 @@ async function send(){
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok,'X-CSRFToken':csrf()},
       body:JSON.stringify({content:txt,model:curmod,files:fsn,enable_search:searchon,enable_tools:toolson})
     });
+
+    /* ── Bug fix: check HTTP status before reading as SSE ── */
+    if(!res.ok){
+      let errMsg=`Server error (${res.status})`;
+      try{const ed=await res.json();errMsg=ed.error||errMsg;}catch(e){}
+      if(res.status===401){
+        errMsg='Session expired — refreshing…';
+        thk.remove();showerr(errMsg);
+        try{await sb.auth.refreshSession();}catch(e){}
+        endst();return;
+      }
+      thk.remove();showerr(errMsg);endst();return;
+    }
+
     const rdr=res.body.getReader();const dec=new TextDecoder();let buf='';
     while(true){
       const{value,done}=await rdr.read();if(done) break;
@@ -721,6 +736,15 @@ async function send(){
       for(const line of lines){
         if(!line.startsWith('data: ')) continue;
         let p;try{p=JSON.parse(line.slice(6))}catch{continue}
+        if(p.type==='ping'||p.type==='thinking'){
+          /* keepalive / round indicator — update thinking dots label */
+          if(p.type==='thinking'&&p.round>1){
+            const lbl=thk.querySelector('.tround');
+            if(lbl) lbl.textContent=`Round ${p.round}…`;
+            else{const d=document.createElement('div');d.className='tround';d.style.cssText='font-size:11px;color:var(--text3);margin-left:8px;';d.textContent=`Round ${p.round}…`;thk.querySelector('.trow')?.appendChild(d);}
+          }
+          continue;
+        }
         if(p.type==='tool_use'){
           const tc=mktcard(p.tool,p.args,p.call_id);
           thk.innerHTML='';thk.appendChild(tc);
@@ -747,8 +771,9 @@ async function send(){
   }catch(err){
     if(err.name!=='AbortError'){thk.remove();showerr(err.message);}
     else{thk.remove();const b=ael?.querySelector('.bbl');if(b&&raw.length){b.innerHTML=rendmd(raw.join(''));prcblks(b);renmath(b);}}
+  } finally {
+    endst();scrbot();
   }
-  endst();scrbot();
 }
 
 /* REGEN/EDIT */
@@ -905,7 +930,7 @@ function cpcod(btn){const c=btn.closest('pre').querySelector('code')?.innerText|
 function renmath(el){if(typeof renderMathInElement==='function'){try{renderMathInElement(el,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});}catch(e){}}}
 
 /* WELCOME CHIPS */
-function usechip(c){const t=c.querySelector('.wct').textContent;document.getElementById('mi').value=t+': ';document.getElementById('mi').focus();chksnd();}
+function usechip(c){if(streaming)return;const t=c.querySelector('.wct').textContent;document.getElementById('mi').value=t+': ';document.getElementById('mi').focus();chksnd();}
 
 /* PANELS */
 function opanel(id){document.getElementById(id).classList.add('on')}

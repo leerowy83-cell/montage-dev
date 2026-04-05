@@ -1,271 +1,63 @@
 """
-MontageDev Tool Schemas — Groq JSON schemas for all tools.
-Ported from Claude Code's tool prompt files:
-  BashTool/prompt.ts, FileReadTool/prompt.ts, FileWriteTool/prompt.ts,
-  FileEditTool/prompt.ts, GlobTool/prompt.ts, GrepTool/prompt.ts,
-  TodoWriteTool, web_search (existing)
+MontageDev Tool Schemas — All 20 tools with full Groq JSON schemas.
+Tools: Bash, Read, Write, Edit, Glob, Grep, TodoWrite, web_search,
+       NotebookRead, NotebookEdit, UrlFetch, Diff, SqlQuery, JsonQuery,
+       RegexTest, FormatCode, LintCode, RunTests, GitOp, ApiCall,
+       SecretScan, MemoryWrite, Task
 """
 
-BASH_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "Bash",
-        "description": (
-            "Execute a bash command in the shell. "
-            "Use for system commands, running scripts, installing packages, git operations, "
-            "and terminal operations that require shell execution. "
-            "IMPORTANT: Prefer dedicated tools (Read, Write, Edit, Glob, Grep) when they apply — "
-            "only use Bash when no dedicated tool covers the operation. "
-            "Working directory is /tmp/workspace. Commands time out after 30s. "
-            "NEVER skip git hooks (--no-verify). "
-            "NEVER run destructive commands (rm -rf, drop table, etc.) without user confirmation."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "The bash command to execute. Use absolute paths when referencing files.",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Brief description of what this command does (shown to user).",
-                },
-            },
-            "required": ["command"],
-        },
-    },
-}
+BASH_TOOL = {"type":"function","function":{"name":"Bash","description":"Execute a bash command in the shell. Use for system commands, running scripts, installing packages, git ops, and terminal operations. IMPORTANT: Prefer dedicated tools when they apply — Read > cat, Edit > sed, Grep > grep, Glob > find. Working directory is /tmp/workspace. Commands time out after 30s. NEVER use --no-verify on git hooks. NEVER run rm -rf or DROP TABLE without user confirmation.","parameters":{"type":"object","properties":{"command":{"type":"string","description":"The bash command to execute."},"description":{"type":"string","description":"Brief description of what this command does."}},"required":["command"]}}}
 
-READ_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "Read",
-        "description": (
-            "Read a file from the filesystem. Returns file contents with line numbers (cat -n format). "
-            "Use this instead of cat/head/tail/sed. "
-            "The file_path must be an absolute path. "
-            "You can specify line_start and line_end to read a range. "
-            "Reads up to 2000 lines by default — use line_start/line_end for larger files."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Absolute path to the file to read.",
-                },
-                "line_start": {
-                    "type": "integer",
-                    "description": "First line to read (1-indexed). Omit to start from beginning.",
-                },
-                "line_end": {
-                    "type": "integer",
-                    "description": "Last line to read (inclusive). Omit to read to end (max 2000 lines).",
-                },
-            },
-            "required": ["file_path"],
-        },
-    },
-}
+READ_TOOL = {"type":"function","function":{"name":"Read","description":"Read a file from the filesystem with line numbers. Use instead of cat/head/tail/sed. File path must be absolute. Reads up to 2000 lines — use line_start/line_end for larger files.","parameters":{"type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to the file."},"line_start":{"type":"integer","description":"First line (1-indexed). Omit for beginning."},"line_end":{"type":"integer","description":"Last line (inclusive). Omit for end (max 2000 lines)."}},"required":["file_path"]}}}
 
-WRITE_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "Write",
-        "description": (
-            "Write a file to the filesystem. Overwrites existing file if present. "
-            "IMPORTANT: If this is an existing file, you MUST use the Read tool first. "
-            "Prefer the Edit tool for modifying existing files — it only sends the diff. "
-            "Only use Write to create new files or for complete rewrites. "
-            "NEVER create documentation (*.md / README) files unless explicitly asked. "
-            "Only use emojis in files if the user explicitly requests it."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Absolute path to the file to write.",
-                },
-                "content": {
-                    "type": "string",
-                    "description": "Full content to write to the file.",
-                },
-            },
-            "required": ["file_path", "content"],
-        },
-    },
-}
+WRITE_TOOL = {"type":"function","function":{"name":"Write","description":"Write a file to the filesystem. Overwrites existing file. IMPORTANT: Read the file first if it exists. Prefer Edit for modifications. Only use Write for new files or complete rewrites.","parameters":{"type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to write."},"content":{"type":"string","description":"Full content to write."}},"required":["file_path","content"]}}}
 
-EDIT_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "Edit",
-        "description": (
-            "Perform exact string replacements in a file. "
-            "You MUST use the Read tool at least once before editing. "
-            "The old_string must match the file content exactly (including whitespace/indentation). "
-            "old_string must be unique in the file — if it isn't, provide more surrounding context or use replace_all. "
-            "ALWAYS prefer editing existing files. NEVER write new files unless explicitly required. "
-            "Only add emojis if the user explicitly requests it."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Absolute path to the file to edit.",
-                },
-                "old_string": {
-                    "type": "string",
-                    "description": "Exact string to find and replace. Must be unique in the file.",
-                },
-                "new_string": {
-                    "type": "string",
-                    "description": "String to replace old_string with.",
-                },
-                "replace_all": {
-                    "type": "boolean",
-                    "description": "If true, replace all occurrences of old_string. Default false.",
-                },
-            },
-            "required": ["file_path", "old_string", "new_string"],
-        },
-    },
-}
+EDIT_TOOL = {"type":"function","function":{"name":"Edit","description":"Exact string replacement in a file. MUST Read file first. old_string must match exactly (including whitespace). Must be unique unless replace_all=true. ALWAYS prefer Edit over Write for existing files.","parameters":{"type":"object","properties":{"file_path":{"type":"string","description":"Absolute path to the file."},"old_string":{"type":"string","description":"Exact string to find and replace."},"new_string":{"type":"string","description":"Replacement string."},"replace_all":{"type":"boolean","description":"Replace all occurrences. Default false."}},"required":["file_path","old_string","new_string"]}}}
 
-GLOB_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "Glob",
-        "description": (
-            "Fast file pattern matching. Supports glob patterns like '**/*.js' or 'src/**/*.ts'. "
-            "Returns matching file paths sorted by modification time. "
-            "Use this instead of find or ls when searching for files by name pattern."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": "Glob pattern to match files (e.g. '**/*.py', 'src/**/*.ts').",
-                },
-                "cwd": {
-                    "type": "string",
-                    "description": "Directory to search from. Defaults to /tmp/workspace.",
-                },
-            },
-            "required": ["pattern"],
-        },
-    },
-}
+GLOB_TOOL = {"type":"function","function":{"name":"Glob","description":"Fast file pattern matching. Supports patterns like '**/*.js'. Returns matching paths sorted by modification time. Use instead of find or ls.","parameters":{"type":"object","properties":{"pattern":{"type":"string","description":"Glob pattern (e.g. '**/*.py', 'src/**/*.ts')."},"cwd":{"type":"string","description":"Directory to search from. Defaults to /tmp/workspace."}},"required":["pattern"]}}}
 
-GREP_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "Grep",
-        "description": (
-            "Search file contents using regex. "
-            "ALWAYS use Grep for search tasks — never invoke grep or rg as a Bash command. "
-            "Supports full regex syntax (e.g. 'log.*Error', r'function\\s+\\w+'). "
-            "Filter files with glob_pattern (e.g. '*.js') or file_type (e.g. 'py', 'js'). "
-            "Output modes: 'content' shows matching lines, 'files' shows file paths only, 'count' shows match counts."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": "Regex pattern to search for.",
-                },
-                "cwd": {
-                    "type": "string",
-                    "description": "Directory to search. Defaults to /tmp/workspace.",
-                },
-                "glob_pattern": {
-                    "type": "string",
-                    "description": "Glob pattern to filter files (e.g. '*.py').",
-                },
-                "output_mode": {
-                    "type": "string",
-                    "enum": ["content", "files", "count"],
-                    "description": "Output mode. Default 'content'.",
-                },
-                "case_insensitive": {
-                    "type": "boolean",
-                    "description": "Case-insensitive search. Default false.",
-                },
-            },
-            "required": ["pattern"],
-        },
-    },
-}
+GREP_TOOL = {"type":"function","function":{"name":"Grep","description":"Search file contents using regex. Use instead of grep/rg shell commands. Supports full regex. Filter by glob_pattern or file_type. Output modes: content (matching lines), files (file paths), count (match counts).","parameters":{"type":"object","properties":{"pattern":{"type":"string","description":"Regex pattern to search."},"cwd":{"type":"string","description":"Directory to search."},"glob_pattern":{"type":"string","description":"Glob to filter files (e.g. '*.py')."},"output_mode":{"type":"string","enum":["content","files","count"],"description":"Output mode. Default 'content'."},"case_insensitive":{"type":"boolean","description":"Case-insensitive. Default false."}},"required":["pattern"]}}}
 
-TODO_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "TodoWrite",
-        "description": (
-            "Create and manage a todo list for the current task. "
-            "Use this to break down complex tasks, track progress, and communicate your plan to the user. "
-            "Mark tasks as 'in_progress' when you start them, 'done' when complete. "
-            "Only have one task 'in_progress' at a time. "
-            "Use for tasks with 3+ steps, multiple components, or when you want to show your plan."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "todos": {
-                    "type": "array",
-                    "description": "Complete list of todos (replaces existing list).",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "string", "description": "Unique id for this todo item."},
-                            "content": {"type": "string", "description": "Description of the task."},
-                            "status": {
-                                "type": "string",
-                                "enum": ["pending", "in_progress", "done"],
-                                "description": "Current status of the task.",
-                            },
-                            "priority": {
-                                "type": "string",
-                                "enum": ["high", "medium", "low"],
-                                "description": "Priority level.",
-                            },
-                        },
-                        "required": ["id", "content", "status"],
-                    },
-                },
-            },
-            "required": ["todos"],
-        },
-    },
-}
+TODO_TOOL = {"type":"function","function":{"name":"TodoWrite","description":"Create and manage a task list for the current work. Break complex tasks, track progress, communicate plan. Mark in_progress when starting, done when complete. Only one in_progress at a time. Use for tasks with 3+ steps.","parameters":{"type":"object","properties":{"todos":{"type":"array","description":"Complete list of todos (replaces existing list).","items":{"type":"object","properties":{"id":{"type":"string","description":"Unique id."},"content":{"type":"string","description":"Task description."},"status":{"type":"string","enum":["pending","in_progress","done"]},"priority":{"type":"string","enum":["high","medium","low"]}},"required":["id","content","status"]}}},"required":["todos"]}}}
 
-WEB_SEARCH_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": (
-            "Search the internet for current, real-time information. "
-            "Use this when the user asks about recent events, current prices, "
-            "news, live data, or anything that may have changed after your training cutoff."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query. Be concise and specific.",
-                }
-            },
-            "required": ["query"],
-        },
-    },
-}
+WEB_SEARCH_TOOL = {"type":"function","function":{"name":"web_search","description":"Search the internet for current, real-time information. Use for: recent events, current prices, news, live data, documentation you're unsure about, anything after training cutoff.","parameters":{"type":"object","properties":{"query":{"type":"string","description":"Concise, specific search query."}},"required":["query"]}}}
 
-ALL_TOOLS = [BASH_TOOL, READ_TOOL, WRITE_TOOL, EDIT_TOOL, GLOB_TOOL, GREP_TOOL, TODO_TOOL, WEB_SEARCH_TOOL]
+NOTEBOOK_READ_TOOL = {"type":"function","function":{"name":"NotebookRead","description":"Read a Jupyter notebook (.ipynb) file. Returns cell types, source code, and outputs. Use for understanding notebook structure before editing.","parameters":{"type":"object","properties":{"notebook_path":{"type":"string","description":"Absolute path to the .ipynb file."},"cell_index":{"type":"integer","description":"Specific cell index to read (0-based). Omit for all cells."}},"required":["notebook_path"]}}}
+
+NOTEBOOK_EDIT_TOOL = {"type":"function","function":{"name":"NotebookEdit","description":"Edit a Jupyter notebook cell. Can insert, replace, or delete cells. Read the notebook first with NotebookRead.","parameters":{"type":"object","properties":{"notebook_path":{"type":"string","description":"Absolute path to the .ipynb file."},"cell_index":{"type":"integer","description":"Cell index to edit/insert at (0-based)."},"new_source":{"type":"string","description":"New source code for the cell."},"cell_type":{"type":"string","enum":["code","markdown"],"description":"Cell type. Default 'code'."},"action":{"type":"string","enum":["replace","insert","delete"],"description":"Action to perform. Default 'replace'."}},"required":["notebook_path","cell_index"]}}}
+
+URL_FETCH_TOOL = {"type":"function","function":{"name":"UrlFetch","description":"Fetch the content of a URL. Use for: reading documentation, fetching API responses, downloading text/JSON content, verifying URLs. Returns the response body as text. Respects Content-Type (parses JSON, returns text for HTML).","parameters":{"type":"object","properties":{"url":{"type":"string","description":"The URL to fetch."},"method":{"type":"string","enum":["GET","POST","PUT","PATCH","DELETE"],"description":"HTTP method. Default GET."},"headers":{"type":"object","description":"HTTP headers as key-value pairs."},"body":{"type":"string","description":"Request body for POST/PUT/PATCH."},"max_bytes":{"type":"integer","description":"Max bytes to return. Default 50000."}},"required":["url"]}}}
+
+DIFF_TOOL = {"type":"function","function":{"name":"Diff","description":"Show the difference between two files or between a file and provided content. Returns unified diff format. Use for: reviewing changes, comparing versions, understanding what changed.","parameters":{"type":"object","properties":{"file_a":{"type":"string","description":"Absolute path to the first file (or 'stdin' to use content_a)."},"file_b":{"type":"string","description":"Absolute path to the second file (or 'stdin' to use content_b)."},"content_a":{"type":"string","description":"Content for file_a when file_a='stdin'."},"content_b":{"type":"string","description":"Content for file_b when file_b='stdin'."},"context_lines":{"type":"integer","description":"Lines of context around changes. Default 3."}},"required":["file_a","file_b"]}}}
+
+SQL_QUERY_TOOL = {"type":"function","function":{"name":"SqlQuery","description":"Execute SQL queries against a SQLite database file. Use for: inspecting data, testing queries, running migrations on local DBs, data analysis. Returns results as formatted table. Creates DB if it doesn't exist.","parameters":{"type":"object","properties":{"db_path":{"type":"string","description":"Absolute path to the SQLite .db file."},"query":{"type":"string","description":"SQL query to execute. Can be SELECT, INSERT, UPDATE, DELETE, CREATE, etc."},"params":{"type":"array","description":"Optional query parameters (for parameterized queries)."}},"required":["db_path","query"]}}}
+
+JSON_QUERY_TOOL = {"type":"function","function":{"name":"JsonQuery","description":"Query JSON data using jq-style expressions. Use for: extracting fields from JSON files, transforming JSON, analyzing API responses, filtering arrays. Supports jq syntax.","parameters":{"type":"object","properties":{"source":{"type":"string","description":"Absolute path to JSON file, or 'inline' to use data parameter."},"expression":{"type":"string","description":"jq expression (e.g. '.users[] | .name', '.items | length')."},"data":{"type":"string","description":"Inline JSON string when source='inline'."}},"required":["source","expression"]}}}
+
+REGEX_TEST_TOOL = {"type":"function","function":{"name":"RegexTest","description":"Test a regex pattern against text. Shows matches, capture groups, and named groups. Use for: developing regex patterns, validating regex, understanding what a regex matches.","parameters":{"type":"object","properties":{"pattern":{"type":"string","description":"Regex pattern to test."},"text":{"type":"string","description":"Text to test the pattern against."},"flags":{"type":"string","description":"Regex flags: i (case-insensitive), m (multiline), s (dotall), g (global). Default none."},"language":{"type":"string","enum":["python","javascript"],"description":"Regex flavor. Default 'python'."}},"required":["pattern","text"]}}}
+
+FORMAT_CODE_TOOL = {"type":"function","function":{"name":"FormatCode","description":"Format source code using the appropriate formatter for the language. Python: black. JavaScript/TypeScript: prettier. Go: gofmt. Rust: rustfmt. SQL: sqlformat. Returns formatted code.","parameters":{"type":"object","properties":{"code":{"type":"string","description":"Source code to format."},"language":{"type":"string","enum":["python","javascript","typescript","json","html","css","sql","markdown"],"description":"Programming language of the code."},"file_path":{"type":"string","description":"Optionally format a file in-place instead of inline code."}},"required":["language"]}}}
+
+LINT_CODE_TOOL = {"type":"function","function":{"name":"LintCode","description":"Lint source code for errors, style issues, and potential bugs. Python: ruff/pylint. JavaScript: eslint. Returns list of issues with severity, line number, and message.","parameters":{"type":"object","properties":{"code":{"type":"string","description":"Source code to lint."},"language":{"type":"string","enum":["python","javascript","typescript"],"description":"Programming language."},"file_path":{"type":"string","description":"Optionally lint a file instead of inline code."},"rules":{"type":"array","description":"Specific rule IDs to check (omit for all rules)."}},"required":["language"]}}}
+
+RUN_TESTS_TOOL = {"type":"function","function":{"name":"RunTests","description":"Execute test files and return structured results. Supports: pytest (Python), jest/vitest (JavaScript), go test (Go). Returns: pass/fail counts, failing test names, error messages, coverage if available.","parameters":{"type":"object","properties":{"test_path":{"type":"string","description":"Path to test file or directory."},"framework":{"type":"string","enum":["pytest","jest","vitest","go","mocha","rspec"],"description":"Test framework. Auto-detected if omitted."},"filter":{"type":"string","description":"Pattern to filter test names."},"coverage":{"type":"boolean","description":"Include coverage report. Default false."},"timeout":{"type":"integer","description":"Test timeout in seconds. Default 60."}},"required":["test_path"]}}}
+
+GIT_OP_TOOL = {"type":"function","function":{"name":"GitOp","description":"Execute git operations with structured output. More reliable than Bash for git. Operations: status, diff, log, add, commit, push, pull, branch, checkout, merge, stash.","parameters":{"type":"object","properties":{"operation":{"type":"string","enum":["status","diff","log","add","commit","push","pull","branch","checkout","merge","stash","stash_pop","reset","clean"],"description":"Git operation to perform."},"args":{"type":"object","description":"Operation-specific arguments. commit: {message, all}. add: {files}. branch: {name, delete}. checkout: {branch, create}. log: {n, oneline}. diff: {staged, file}. stash: {message}. push: {remote, branch, force}. merge: {branch}. reset: {hard, soft, mixed, ref}."}},"required":["operation"]}}}
+
+API_CALL_TOOL = {"type":"function","function":{"name":"ApiCall","description":"Make an HTTP API call and return the response. Use for: testing APIs during development, fetching data from external services, verifying endpoints. Supports auth headers and request bodies.","parameters":{"type":"object","properties":{"url":{"type":"string","description":"Full URL of the API endpoint."},"method":{"type":"string","enum":["GET","POST","PUT","PATCH","DELETE","HEAD","OPTIONS"],"description":"HTTP method. Default GET."},"headers":{"type":"object","description":"Request headers. e.g. {\"Authorization\": \"Bearer token\", \"Content-Type\": \"application/json\"}."},"body":{"type":"object","description":"Request body (for POST/PUT/PATCH). Will be JSON-serialized."},"params":{"type":"object","description":"URL query parameters. e.g. {\"page\": 1, \"limit\": 20}."},"timeout":{"type":"integer","description":"Timeout in seconds. Default 30."}},"required":["url"]}}}
+
+SECRET_SCAN_TOOL = {"type":"function","function":{"name":"SecretScan","description":"Scan files or directories for accidentally committed secrets, credentials, API keys, and sensitive data. Returns findings with file path, line number, type of secret, and severity. ALWAYS run before committing code that handles credentials.","parameters":{"type":"object","properties":{"path":{"type":"string","description":"File or directory path to scan. Scans recursively."},"code":{"type":"string","description":"Inline code to scan instead of a file."},"severity":{"type":"string","enum":["all","high","critical"],"description":"Minimum severity level to report. Default 'all'."}},"required":[]}}}
+
+MEMORY_WRITE_TOOL = {"type":"function","function":{"name":"MemoryWrite","description":"Write persistent facts to memory that will be recalled in future conversations. Use for: project conventions, API URLs, tech stack details, user preferences, architectural decisions. Keys should be descriptive. Values are stored as strings.","parameters":{"type":"object","properties":{"key":{"type":"string","description":"Memory key (e.g. 'project_stack', 'api_base_url', 'coding_conventions')."},"value":{"type":"string","description":"The fact to remember."},"action":{"type":"string","enum":["write","delete","list"],"description":"Action: write (default), delete a key, or list all keys."}},"required":["key"]}}}
+
+TASK_TOOL = {"type":"function","function":{"name":"Task","description":"Spawn a focused subtask agent to handle a specific, well-defined piece of work independently. The subtask gets its own context and tool access. Use for: parallel research, generating a specific module, running a long analysis. Pass complete context — the subtask starts fresh with no history.","parameters":{"type":"object","properties":{"description":{"type":"string","description":"Clear, specific task description for the subtask agent."},"prompt":{"type":"string","description":"The full prompt/instructions for the subtask. Be comprehensive — it has no history."},"tools":{"type":"array","description":"Tool names to give the subtask. Defaults to all available tools."}},"required":["description","prompt"]}}}
+
+ALL_TOOLS = [
+    BASH_TOOL, READ_TOOL, WRITE_TOOL, EDIT_TOOL, GLOB_TOOL, GREP_TOOL,
+    TODO_TOOL, WEB_SEARCH_TOOL, NOTEBOOK_READ_TOOL, NOTEBOOK_EDIT_TOOL,
+    URL_FETCH_TOOL, DIFF_TOOL, SQL_QUERY_TOOL, JSON_QUERY_TOOL,
+    REGEX_TEST_TOOL, FORMAT_CODE_TOOL, LINT_CODE_TOOL, RUN_TESTS_TOOL,
+    GIT_OP_TOOL, API_CALL_TOOL, SECRET_SCAN_TOOL, MEMORY_WRITE_TOOL, TASK_TOOL,
+]
 
 TOOL_NAMES = {t["function"]["name"] for t in ALL_TOOLS}

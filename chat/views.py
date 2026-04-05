@@ -273,10 +273,16 @@ def send_message(request, conversation_id):
         _sb        = get_supabase_for_user(_token)
 
         try:
+            # ── Keepalive: yield immediately so connection stays open ─────────
+            yield "data: {\"type\": \"ping\"}\n\n"
+
             messages = [{"role": "system", "content": system_prompt}] + history
 
-            # ── Multi-turn agentic loop (mirrors query.ts runTools()) ──────────
+            # ── Multi-turn agentic loop ───────────────────────────────────────
             for round_num in range(MAX_AGENTIC_ROUNDS):
+                # Signal thinking before each Groq call
+                yield "data: {\"type\": \"thinking\", \"round\": " + str(round_num + 1) + "}\n\n"
+
                 kw = dict(
                     model=selected_model,
                     messages=messages,
@@ -288,6 +294,7 @@ def send_message(request, conversation_id):
                     kw["tools"]       = tools
                     kw["tool_choice"] = "auto"
 
+                yield 'data: {"type": "thinking", "round": ' + str(round_num + 1) + '}\n\n'
                 response    = client.chat.completions.create(**kw)
                 assistant_msg = response.choices[0].message
 
